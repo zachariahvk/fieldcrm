@@ -113,6 +113,7 @@ main,.foot{z-index:1}
 .menu-open .menu a.ml{animation:rise .5s var(--ease) backwards;animation-delay:calc(var(--i) * 40ms + 60ms)}
 .menu-cta{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 4px 4px}
 .menu-cta .btn{--h:48px;padding:0 12px}
+.menu-cta .btn-p{grid-column:1/-1}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}}
 @media (max-width:420px){.brand small{display:none}.nav-bar>.btn{display:none}}
 @media (min-width:920px){.nav-links{display:flex}.menu-btn,.menu{display:none}}
