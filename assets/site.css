@@ -99,6 +99,8 @@ main,.foot{z-index:1}
 .nav-links a{position:relative;padding:10px 14px;border-radius:12px;font-size:14.5px;font-weight:600;color:var(--body);text-decoration:none;transition:color .2s,background-color .2s}
 .nav-links a:hover{color:var(--ink);background:rgba(85,99,196,.07)}
 .nav-links a[aria-current="page"]{color:var(--indigo);background:rgba(85,99,196,.1)}
+.nav-login{display:none;padding:10px 12px;border-radius:12px;font-size:14.5px;font-weight:700;color:var(--indigo);text-decoration:none;white-space:nowrap;transition:background-color .2s}
+.nav-login:hover{background:rgba(85,99,196,.08)}
 .menu-btn{width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:14px;background:var(--lav);cursor:pointer;-webkit-tap-highlight-color:transparent;color:var(--indigo)}
 .menu-btn .dots{display:grid;grid-template-columns:repeat(3,4px);gap:3.5px;transition:transform .45s var(--ease)}
 .menu-btn .dots i{width:4px;height:4px;border-radius:50%;background:currentColor;transition:transform .45s var(--ease),opacity .3s}
@@ -116,7 +118,7 @@ main,.foot{z-index:1}
 .menu-cta .btn-p{grid-column:1/-1}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}}
 @media (max-width:420px){.brand small{display:none}.nav-bar>.btn{display:none}}
-@media (min-width:920px){.nav-links{display:flex}.menu-btn,.menu{display:none}}
+@media (min-width:920px){.nav-links{display:flex}.menu-btn,.menu{display:none}.nav-login{display:inline-flex}}
 
 /* ── glass surfaces ── */
 .glass{position:relative;background:var(--glass);border-radius:26px;box-shadow:inset 0 0 0 1px var(--glass-b),var(--shadow)}
