@@ -90,20 +90,149 @@
     $$('[data-reveal]').forEach(el => { if (el.getBoundingClientRect().top > vh) rio.observe(el); });
   }
 
-  /* ── prices: INR in India, USD elsewhere, with a switch ── */
-  const priceData = $('#prices');
-  let prices = null;
-  try { prices = JSON.parse(priceData ? priceData.textContent : 'null'); } catch (e) {}
-  if (prices && prices.INR) {
-    root.classList.add('has-prices');
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-    const fmt = (c, v) => new Intl.NumberFormat(c === 'INR' ? 'en-IN' : 'en-US', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(v);
-    const show = c => {
-      $$('[data-plan]').forEach(el => { const v = prices[c] && prices[c][el.dataset.plan]; el.textContent = v ? fmt(c, v) : 'On request'; });
-      $$('.cur-switch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.cur === c));
+  /* ── pricing: billing switch, add-on pop-ups and running totals ── */
+  const pricing = $('.pricing');
+  let pdata = null;
+  try { pdata = JSON.parse(($('#pricing-data') || {}).textContent || 'null'); } catch (e) {}
+  if (pricing && pdata) {
+    const inr = v => '₹' + Math.round(v).toLocaleString('en-IN');
+    const plans = {}, addons = {};
+    pdata.plans.forEach(p => { plans[p.id] = p; });
+    pdata.addons.forEach(a => { addons[a.id] = a; });
+    const picked = {};
+    pdata.plans.forEach(p => { picked[p.id] = new Set(); });
+    const sw = $('.bill-sw', pricing);
+    const opts = $$('[role="radio"]', sw);
+    const periods = opts.map(o => o.dataset.billing);
+    const dlg = $('#addonDlg', pricing);
+    let billing = pricing.dataset.billing || 'monthly';
+    let cur = null;   // the add-on pop-up's { plan, addon, opener }
+
+    const names = ids => ids.map(a => addons[a].name);
+    const list = arr => arr.length < 2 ? arr.join('') : arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1];
+    const quarterly = () => billing === 'quarterly';
+    const total = (id, sel) => quarterly() ? plans[id].quarterly + 3 * pdata.addon_price * sel.size : plans[id].monthly + pdata.addon_price * sel.size;
+    const per = () => quarterly() ? 'for 3 months' : 'a month';
+    // a bigger plan that already has everything chosen, for the same money or less
+    const better = (id, sel) => {
+      if (billing === 'yearly' || !sel.size) return null;
+      const want = plans[id].includes.concat([...sel]);
+      const key = quarterly() ? 'quarterly' : 'monthly';
+      const t = total(id, sel);
+      return pdata.plans.filter(p => p[key] > plans[id][key] && p[key] <= t && want.every(a => p.includes.includes(a)))
+        .sort((a, b) => a[key] - b[key])[0] || null;
     };
-    $$('.cur-switch button').forEach(b => { if (!prices[b.dataset.cur]) b.hidden = true; b.addEventListener('click', () => show(b.dataset.cur)); });
-    show(/Calcutta|Kolkata/.test(tz) || !prices.USD ? 'INR' : 'USD');
+    const tip = (id, sel) => {
+      const b = better(id, sel);
+      if (!b) return '';
+      const key = quarterly() ? 'quarterly' : 'monthly';
+      return b[key] === total(id, sel) ? `${b.name} costs the same and includes all of these.` : `${b.name} includes all of these for less: ${inr(b[key])} ${per()}.`;
+    };
+    const waLink = id => {
+      const extra = names([...picked[id]]);
+      const plus = extra.length ? `, with ${list(extra)}` : '';
+      const text = billing === 'yearly'
+        ? `Hi, could you send a yearly quote for the Field CRM ${plans[id].name} plan${plus}? We have __ people in the field.`
+        : `Hi, I'd like to start on the Field CRM ${plans[id].name} plan, billed ${billing}${plus}. We have __ people in the field.`;
+      return `https://wa.me/${pdata.whatsapp}?text=${encodeURIComponent(text)}`;
+    };
+
+    const paintCard = card => {
+      const id = card.dataset.tier, sel = picked[id];
+      $$('.ta-chip', card).forEach(c => c.setAttribute('aria-pressed', sel.has(c.dataset.addon)));
+      const sum = $('.ta-sum', card);
+      if (sum) {
+        sum.replaceChildren();
+        if (sel.size) {
+          const head = document.createElement('b');
+          head.textContent = `${plans[id].name} + ${list(names([...sel]))}`;
+          const rest = billing === 'yearly' ? ': priced into your yearly quote.' : `: ${inr(total(id, sel))} ${per()} + GST.`;
+          sum.append(head, rest);
+          const t = tip(id, sel);
+          if (t) { const s = document.createElement('span'); s.className = 'ta-tip'; s.textContent = 'Tip: ' + t; sum.append(s); }
+        }
+      }
+      const cta = $('[data-choose]', card);
+      if (cta) cta.href = waLink(id);
+    };
+    const paintAll = () => $$('.tier', pricing).forEach(paintCard);
+
+    const paintDialog = () => {
+      const a = addons[cur.addon], p = plans[cur.plan], on = picked[cur.plan].has(cur.addon);
+      $('#addonDlgTitle', dlg).textContent = a.name;
+      $('.ad-desc', dlg).textContent = a.desc;
+      $('.ad-ic use', dlg).setAttribute('href', '#' + a.icon);
+      $('.ad-points', dlg).replaceChildren(...a.points.map(t => { const li = document.createElement('li'); li.textContent = t; return li; }));
+      const price = $('.ad-price', dlg), b = document.createElement('b');
+      price.replaceChildren();
+      if (billing === 'yearly') price.append('Priced into your yearly quote for ', Object.assign(b, { textContent: p.name }), '.');
+      else price.append(Object.assign(b, { textContent: inr((quarterly() ? 3 : 1) * pdata.addon_price) }), ` ${per()}, on top of ${p.name}.`);
+      const sim = new Set(picked[cur.plan]); sim.add(cur.addon);
+      const nudge = $('.ad-nudge', dlg), t = on ? '' : tip(cur.plan, sim);
+      nudge.textContent = t ? 'Tip: ' + t : '';
+      nudge.hidden = !t;
+      const tgl = $('[data-ad-toggle]', dlg);
+      tgl.textContent = on ? `Remove from ${p.name}` : `Add to ${p.name}`;
+      tgl.classList.toggle('btn-p', !on);
+      tgl.classList.toggle('btn-s', on);
+      $('[data-ad-more]', dlg).href = a.href;
+    };
+
+    const setBilling = (b, focus) => {
+      billing = b;
+      pricing.dataset.billing = b;
+      opts.forEach(o => {
+        const on = o.dataset.billing === b;
+        o.setAttribute('aria-checked', on);
+        o.tabIndex = on ? 0 : -1;
+        if (on && focus) o.focus();
+      });
+      paintAll();
+      if (cur && dlg.open) paintDialog();
+    };
+    const step = d => setBilling(periods[Math.min(periods.length - 1, Math.max(0, periods.indexOf(billing) + d))], true);
+    let swiped = false;
+    opts.forEach(o => o.addEventListener('click', () => { if (swiped) { swiped = false; return; } setBilling(o.dataset.billing); }));
+    sw.addEventListener('keydown', e => {
+      const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (d) { e.preventDefault(); step(d); }
+    });
+    // the switch can also be swiped left or right
+    let sx = null;
+    sw.addEventListener('pointerdown', e => { sx = e.clientX; });
+    sw.addEventListener('pointercancel', () => { sx = null; });
+    sw.addEventListener('pointerup', e => {
+      if (sx === null) return;
+      const dx = e.clientX - sx;
+      sx = null;
+      if (Math.abs(dx) < 24) return;
+      swiped = true;
+      setTimeout(() => { swiped = false; }, 0);
+      step(dx > 0 ? 1 : -1);
+    });
+
+    if (dlg) {
+      $$('.ta-chip', pricing).forEach(c => c.addEventListener('click', () => {
+        cur = { plan: c.closest('.tier').dataset.tier, addon: c.dataset.addon, opener: c };
+        if (typeof dlg.showModal !== 'function') { location.href = addons[cur.addon].href; return; }
+        paintDialog();
+        dlg.showModal();
+      }));
+      $('[data-ad-toggle]', dlg).addEventListener('click', () => {
+        const s = picked[cur.plan];
+        if (s.has(cur.addon)) s.delete(cur.addon); else s.add(cur.addon);
+        paintCard($(`.tier[data-tier="${cur.plan}"]`, pricing));
+        dlg.close();
+      });
+      // a click on the dimmed backdrop closes the pop-up
+      dlg.addEventListener('click', e => {
+        if (e.target !== dlg) return;
+        const r = dlg.getBoundingClientRect();
+        if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close();
+      });
+      dlg.addEventListener('close', () => { if (cur && cur.opener) cur.opener.focus(); });
+    }
+    paintAll();
   }
 
   /* ── per-frame scroll work: read everything first, then write ── */
