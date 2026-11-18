@@ -327,4 +327,15 @@
     const fio = new IntersectionObserver(es => { es.forEach(e => seen.set(e.target, e.isIntersecting)); upd(); });
     watched.forEach(el => fio.observe(el));
   }
+
+  /* ── copy buttons on journal templates ── */
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const pre = btn.closest('.tmpl')?.querySelector('pre');
+      if (!pre) return;
+      try { await navigator.clipboard.writeText(pre.innerText.trim()); btn.textContent = 'Copied'; }
+      catch (e) { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Selected'; }
+      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+  });
 })();
